@@ -1,0 +1,39 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      zip_url:
+        required: true
+      build_id:
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download ZIP
+        run: |
+          wget "${{ github.event.inputs.zip_url }}" -O project.zip
+          unzip project.zip -d project
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+
+      - name: Build APK
+        run: |
+          cd project
+          if [ ! -f pubspec.yaml ]; then cd *; fi
+          flutter pub get
+          flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          find project -name "app-release.apk" -exec mv {} "${{ github.event.inputs.build_id }}.apk" \;
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.build_id }}
+          path: ${{ github.event.inputs.build_id }}.apk

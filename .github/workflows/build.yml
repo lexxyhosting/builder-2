@@ -5,35 +5,51 @@ on:
     inputs:
       zip_url:
         required: true
+        type: string
       build_id:
         required: true
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.24.0
+
       - name: Download ZIP
         run: |
           wget "${{ github.event.inputs.zip_url }}" -O project.zip
           unzip project.zip -d project
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-
-      - name: Build APK
+      - name: Find Flutter Project
         run: |
-          cd project
-          if [ ! -f pubspec.yaml ]; then cd *; fi
+          PROJECT_DIR=$(find project -name pubspec.yaml | head -n 1 | xargs dirname)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Flutter project not found"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+      - name: Build
+        run: |
+          cd "$PROJECT_DIR"
           flutter pub get
           flutter build apk --release
 
-      - name: Rename APK
-        run: |
-          find project -name "app-release.apk" -exec mv {} "${{ github.event.inputs.build_id }}.apk" \;
-
-      - name: Upload APK
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.build_id }}
-          path: ${{ github.event.inputs.build_id }}.apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/*.apk

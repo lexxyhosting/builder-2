@@ -9,11 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      # UPDATE KE v4
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
+      # UPDATE KE v4
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -47,8 +49,9 @@ jobs:
           # Pindahkan hasil APK ke folder utama agar mudah diunggah
           cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/final-app.apk
           
+      # UPDATE KE v4 (Ini biang kerok utamanya!)
       - name: Upload APK ke Bot
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.build_id }}
           path: final-app.apk

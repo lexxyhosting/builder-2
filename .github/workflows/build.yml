@@ -1,4 +1,4 @@
-name: Build Flutter APK
+name: Flutter Build APK
 
 on:
   repository_dispatch:
@@ -24,20 +24,31 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
-      - name: Download User ZIP
+      - name: Download & Extract User ZIP
         run: |
           curl -L "${{ github.event.client_payload.zip_url }}" -o project.zip
           unzip project.zip -d app_source
           
-      - name: Build APK
-        working-directory: ./app_source
+      - name: Build APK (Auto-Detect Directory)
         run: |
+          # Cari lokasi asli pubspec.yaml untuk mengatasi salah struktur ZIP
+          TARGET_DIR=$(dirname $(find ./app_source -name "pubspec.yaml" | head -n 1))
+          if [ -z "$TARGET_DIR" ]; then
+            echo "ERROR: pubspec.yaml tidak ditemukan di dalam file ZIP!"
+            exit 1
+          fi
+          echo "Project Flutter ditemukan di: $TARGET_DIR"
+          cd $TARGET_DIR
+          
+          # Mulai proses kompilasi
           flutter pub get
           flutter build apk --release
           
-      # Upload hasil APK sebagai Artifact agar bisa didownload bot
-      - name: Upload APK
+          # Pindahkan hasil APK ke folder utama agar mudah diunggah
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/final-app.apk
+          
+      - name: Upload APK ke Bot
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ github.event.client_payload.build_id }} # ✅ GANTI JADI INI
-          path: app_source/build/app/outputs/flutter-apk/app-release.apk
+          name: ${{ github.event.client_payload.build_id }}
+          path: final-app.apk

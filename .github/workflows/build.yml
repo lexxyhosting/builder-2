@@ -35,8 +35,9 @@ jobs:
           flutter pub get
           flutter build apk --release
           
+      # Upload hasil APK sebagai Artifact agar bisa didownload bot
       - name: Upload APK
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ github.event.client_payload.build_id }}
+          name: ${{ github.event.client_payload.build_id }} # ✅ GANTI JADI INI
           path: app_source/build/app/outputs/flutter-apk/app-release.apk

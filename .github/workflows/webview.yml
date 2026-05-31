@@ -1,0 +1,126 @@
+name: Build Web to APK
+
+on:
+  repository_dispatch:
+    types: [build_webview]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Menangkap Request dari Bot
+        run: |
+          echo "Memulai proses Webview..."
+          echo "ID Build: ${{ github.event.client_payload.build_id }}"
+          echo "Nama Aplikasi: ${{ github.event.client_payload.app_name }}"
+          echo "URL Website: ${{ github.event.client_payload.web_url }}"
+          
+      - name: Download Logo Aplikasi
+        run: |
+          curl -L "${{ github.event.client_payload.logo_url }}" -o logo.png
+          echo "Logo berhasil didownload!"
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Generate Flutter Webview Project
+        run: |
+          # 1. Buat project flutter baru bernama 'webview_app'
+          flutter create webview_app
+          cd webview_app
+          
+          # 2. Tambahkan package untuk webview dan ganti icon
+          flutter pub add webview_flutter
+          flutter pub add flutter_launcher_icons --dev
+
+      - name: Injeksi Nama, Logo & URL
+        run: |
+          cd webview_app
+          
+          # 3. Ganti Nama Aplikasi di sistem Android (AndroidManifest)
+          sed -i 's/android:label=".*"/android:label="${{ github.event.client_payload.app_name }}"/g' android/app/src/main/AndroidManifest.xml
+          
+          # 4. Setup file pubspec.yaml untuk memproses logo dari Telegram
+          cat <<EOF >> pubspec.yaml
+          flutter_launcher_icons:
+            android: "launcher_icon"
+            ios: true
+            image_path: "../logo.png"
+          EOF
+          
+          # Generate Logo / Icon aplikasi
+          flutter pub get
+          flutter pub run flutter_launcher_icons
+
+          # 5. Tulis ulang kode main.dart agar menjadi aplikasi Webview full-screen
+          cat << 'EOF' > lib/main.dart
+          import 'package:flutter/material.dart';
+          import 'package:webview_flutter/webview_flutter.dart';
+
+          void main() {
+            runApp(const MyApp());
+          }
+
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: '${{ github.event.client_payload.app_name }}',
+                theme: ThemeData(primarySwatch: Colors.blue),
+                home: const WebViewScreen(),
+                debugShowCheckedModeBanner: false,
+              );
+            }
+          }
+
+          class WebViewScreen extends StatefulWidget {
+            const WebViewScreen({super.key});
+
+            @override
+            State<WebViewScreen> createState() => _WebViewScreenState();
+          }
+
+          class _WebViewScreenState extends State<WebViewScreen> {
+            late final WebViewController controller;
+
+            @override
+            void initState() {
+              super.initState();
+              controller = WebViewController()
+                ..setJavaScriptMode(JavaScriptMode.unrestricted)
+                ..loadRequest(Uri.parse('${{ github.event.client_payload.web_url }}'));
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                body: SafeArea(
+                  child: WebViewWidget(controller: controller),
+                ),
+              );
+            }
+          }
+          EOF
+
+      - name: Build APK Release
+        run: |
+          cd webview_app
+          flutter build apk --release
+
+      - name: Upload Hasil APK ke Bot Telegram
+        uses: actions/upload-artifact@v4
+        with:
+          # Nama artifact wajib sama dengan build_id agar bisa didownload oleh bot.js
+          name: ${{ github.event.client_payload.build_id }} 
+          path: webview_app/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 1
